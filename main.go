@@ -61,6 +61,12 @@ func main() {
 		fmt.Print(usage)
 		return
 
+	case "version", "-v", "--version":
+		fmt.Println("GoGet v1.0.0")
+		fmt.Println("Intelligent Go package installer")
+		fmt.Println("https://github.com/kehindetemple/goget")
+		return
+
 	case "info":
 		if len(args) < 2 {
 			fmt.Println("usage: goget info <name>")
