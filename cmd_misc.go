@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"goget/internal/storage"
-	"goget/internal/ui"
+	"github.com/kehindetemple/goget/internal/storage"
+	"github.com/kehindetemple/goget/internal/ui"
 )
 
 // cmdHistory implements Feature 8 (Installation History).

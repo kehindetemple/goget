@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"goget/internal/ghclient"
-	"goget/internal/storage"
+	"github.com/kehindetemple/goget/internal/ghclient"
+	"github.com/kehindetemple/goget/internal/storage"
 )
 
 // cmdInfo implements Feature 5 (Package Information).

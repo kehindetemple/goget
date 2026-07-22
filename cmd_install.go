@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"goget/internal/ghclient"
-	"goget/internal/installer"
-	"goget/internal/storage"
+	"github.com/kehindetemple/goget/internal/ghclient"
+	"github.com/kehindetemple/goget/internal/installer"
+	"github.com/kehindetemple/goget/internal/storage"
 )
 
 func moduleFor(r *ghclient.Repo) string {

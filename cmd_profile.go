@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"goget/internal/installer"
-	"goget/internal/storage"
-	"goget/internal/ui"
+	"github.com/kehindetemple/goget/internal/installer"
+	"github.com/kehindetemple/goget/internal/storage"
+	"github.com/kehindetemple/goget/internal/ui"
 )
 
 // cmdProfileCreate implements "goget profile create <name>".

@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"goget/internal/fuzzy"
-	"goget/internal/ghclient"
-	"goget/internal/ui"
+	"github.com/kehindetemple/goget/internal/fuzzy"
+	"github.com/kehindetemple/goget/internal/ghclient"
+	"github.com/kehindetemple/goget/internal/ui"
 )
 
 // resolveRepo implements the "Complete Search Flow" from the PRD:

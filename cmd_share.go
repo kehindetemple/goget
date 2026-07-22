@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"goget/internal/storage"
-	"goget/internal/ui"
+	"github.com/kehindetemple/goget/internal/storage"
+	"github.com/kehindetemple/goget/internal/ui"
 )
 
 // ---------------------------------------------------------------------------
