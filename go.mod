@@ -1,3 +1,1 @@
-module goget
-
-go 1.22
+module github.com/kehindetemple/goget
