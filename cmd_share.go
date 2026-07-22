@@ -420,7 +420,7 @@ func cmdRegistryShow() error {
 		fmt.Println("No registry configured. Set one with:")
 		fmt.Println("  goget registry set <repo-url>")
 		fmt.Println("\nExample:")
-		fmt.Println("  goget registry set github.com/yourname/goget-profiles")
+		fmt.Println("  goget registry set github.com/yourname/goget-profile")
 		return nil
 	}
 	fmt.Printf("Registry: %s\n", reg.RepoURL)
@@ -488,13 +488,24 @@ func cmdProfilePublish(name string) error {
 }
 
 // ---------------------------------------------------------------------------
-// cmdProfileFetch — fetch a profile from another user's repo
+// cmdProfileFetch — fetch a profile from another user's repo (FIXED)
 // ---------------------------------------------------------------------------
 
 func cmdProfileFetch(username, profilename string) error {
-	// Assume the repo is at github.com/username/goget-profiles
+	// Read from registry instead of hardcoding
+	reg, err := loadRegistryConfig()
+	if err != nil {
+		return err
+	}
+
+	// Extract repo name from registry URL
+	// e.g. github.com/kehindetemple/goget-profile -> goget-profile
+	parts := strings.Split(strings.TrimPrefix(reg.RepoURL, "https://"), "/")
+	if len(parts) < 2 {
+		return fmt.Errorf("invalid registry configuration. Run: goget registry set <repo-url>")
+	}
+	repo := parts[len(parts)-1]
 	owner := username
-	repo := "goget-profiles"
 	path := "profiles/" + profilename + ".json"
 
 	cfg, err := storage.LoadConfig()
