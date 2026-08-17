@@ -1,47 +1,79 @@
 # GoGet
 
-Install Go packages by name — not by full GitHub module path.
+Install Go **CLI tools** by name — not by full GitHub module path.
 
 ```bash
-goget gin
-# instead of: go install github.com/gin-gonic/gin@latest
+goget cli-name
+# instead of: go install github.com/user/cli-name@latest
+
+# Examples: standalone CLI tools
+goget hugo            # Static site generator
+goget k6              # Load testing tool
+goget buf             # Protocol buffer compiler
+goget golangci-lint   # Go linter aggregator
 ```
 
-GoGet searches GitHub, ranks the results, asks you to pick when there's
-more than one reasonable match, detects typos, and remembers what you've
-installed. It has **zero external dependencies** — just the Go standard
-library — so there's nothing to fetch from a module proxy in order to
-build it.
+**Note:** GoGet installs **standalone CLI tools and utilities**. If you want to add a library dependency (like gin, gorm) to your project, use `go get` instead:
 
-## Build
+```bash
+# Adding a dependency to your project
+go get github.com/gin-gonic/gin
+
+# Installing a CLI tool globally
+goget myctl
+```
+
+GoGet searches GitHub for CLI repositories, ranks the results by popularity, shows an interactive menu when there's more than one match, detects typos, and remembers what you've installed. It has **zero external dependencies** — just the Go standard library — so there's nothing to fetch from a module proxy in order to build it.
+
+## Install
+
+### From Binary (Recommended)
+
+Download pre-built binaries from the [Releases](https://github.com/kehindetemple/goget/releases) page:
+- **macOS (Intel):** `goget-macos-amd64`
+- **macOS (Apple Silicon):** `goget-macos-arm64`
+- **Linux:** `goget-linux-amd64`
+- **Windows:** `goget-windows-amd64.exe`
+
+```bash
+# macOS/Linux
+chmod +x goget-macos-amd64
+mv goget-macos-amd64 /usr/local/bin/goget
+
+# Windows: Move goget-windows-amd64.exe to a directory in your PATH
+```
+
+### From Source
 
 Requires Go 1.22+.
 
 ```bash
-go build -o goget .          # macOS/Linux
-go build -o goget.exe .      # Windows
+go install github.com/kehindetemple/goget@latest
 ```
 
-Optionally, install it onto your PATH:
+Or clone and build locally:
 
 ```bash
-go install .
+git clone https://github.com/kehindetemple/goget.git
+cd goget
+go build -o goget .
+# Then move `goget` or `goget.exe` to your PATH
 ```
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `goget <name>` | Search GitHub and install a package |
-| `goget <name> --save <profile>` | Install and save it into a profile |
-| `goget info <name>` | Show package metadata without installing |
-| `goget history` | Show recently installed packages |
+| `goget <tool-name>` | Search GitHub and install a CLI tool |
+| `goget <tool-name> --save <profile>` | Install and save it into a profile |
+| `goget info <tool-name>` | Show tool metadata without installing |
+| `goget history` | Show recently installed tools |
 | `goget login` | Save a GitHub token to raise API rate limits |
-| `goget use <profile>` | Install every package saved in a profile |
+| `goget use <profile>` | Install every tool saved in a profile |
 | `goget profile create <name>` | Create a new empty profile |
 | `goget profile list` | List all profiles |
-| `goget profile show <name>` | Show packages saved in a profile |
-| `goget profile remove <profile> <pkg>` | Remove one package from a profile |
+| `goget profile show <name>` | Show tools saved in a profile |
+| `goget profile remove <profile> <tool>` | Remove one tool from a profile |
 | `goget profile delete <name>` | Delete an entire profile (asks to confirm) |
 | `goget profile export <name>` | Export profile to JSON file |
 | `goget profile import <file>` | Import profile from JSON file |
@@ -52,26 +84,24 @@ go install .
 | `goget profile publish <name>` | Publish profile to registry repository |
 | `goget profile fetch <username> <name>` | Fetch profile from someone's registry |
 
-## How resolution works
+## How it works
 
-For any `goget <name>`, the tool works through this sequence until it
-finds an install target:
+For any `goget <tool-name>`, the resolution flow is:
 
 1. **Local cache** — if you've resolved this exact name before, skip
-   straight to installing (feature: Local Cache).
-2. **GitHub search** — search Go repositories whose name matches `<name>`.
+   straight to installing.
+2. **GitHub search** — search Go repositories whose name matches `<tool-name>`.
    - Exactly one exact match → install it directly.
-   - Several matches (exact or close) → show a numbered menu to pick from
-     (feature: Interactive Package Selection).
-3. **Owner search** — if nothing matched by name, check whether `<name>`
+   - Multiple matches → show an interactive menu ranked by **stars** and **recency** so you pick the right one.
+3. **GitHub user/org search** — if nothing matched by name, check whether `<tool-name>`
    is a GitHub username/org, and if so list their top Go repositories to
-   choose from (feature: GitHub Owner Search).
-4. **Typo suggestions** — if it's not a package or a user, run a broader
-   search and rank results by edit distance to `<name>`, presenting a
-   "Did you mean…" list (feature: Intelligent Typo Detection).
+   choose from.
+4. **Typo detection** — if it's not a tool or user, run a broader search and rank results by edit distance (Levenshtein distance), suggesting "Did you mean…" options for typos.
 
-Whatever you pick gets cached, installed with `go install <module>@latest`,
-and logged to your install history.
+When you pick a tool, GoGet:
+- Caches the resolution (name → module path) for fast future installs
+- Runs `go install github.com/user/tool@latest` to download and install it
+- Logs it to your install history for reference
 
 ## Profiles
 
@@ -186,7 +216,7 @@ goget profile share myapi
 
 Output:
 ```
-✔ Profile shared to Gist
+✅ Profile shared to Gist
 Gist ID: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 Gist URL: https://gist.github.com/Ayokodes/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 ```
@@ -339,7 +369,7 @@ goget/
     ├── installer/       wraps `go install`
     └── ui/              terminal prompts (menus, confirm, text input)
 ```
-📞 Support
+📱 Support
 GoGet CLI Issues: https://github.com/kehindetemple/goget/issues
 Profiles Issues: Open an issue in this repo
 Questions: Discussions tab
@@ -351,7 +381,7 @@ Found this helpful?
 
 ⭐ Star this repo
 🔄 Share profiles with your team
-📢 Spread the word about GoGet!
+🎤 Spread the word about GoGet!
 
 ## Notes / known limitations
 
