@@ -108,10 +108,10 @@ func resolvePackage(input string, offline bool) (registry.Package, string, error
 	if pkg, ok := catalog.Resolve(request.Name); ok {
 		return pkg, request.Version, nil
 	}
+	if suggestion, ok := suggestPackage(catalog, request.Name); ok {
+		return registry.Package{}, "", fmt.Errorf("resolution error: %q was not found; did you mean %q?", request.Name, suggestion.Name)
+	}
 	if offline {
-		if suggestion, ok := suggestPackage(catalog, request.Name); ok {
-			return registry.Package{}, "", fmt.Errorf("resolution error: %q is not in the local cache; did you mean %q? (offline mode made no network requests)", request.Name, suggestion.Name)
-		}
 		return registry.Package{}, "", fmt.Errorf("resolution error: %q is not in the local cache or registry; offline mode made no network requests", request.Name)
 	}
 

@@ -34,3 +34,10 @@ func TestTypoSuggestionHandlesTransposition(t *testing.T) {
 		t.Fatalf("expected gin suggestion, got %q", pkg.Name)
 	}
 }
+
+func TestTypoSuggestionHandlesMisspelling(t *testing.T) {
+	pkg, ok := suggestPackage(registry.New(registry.DefaultPackages()), "bycrpt")
+	if !ok || pkg.Name != "bcrypt" {
+		t.Fatalf("expected bcrypt suggestion, got %q", pkg.Name)
+	}
+}
