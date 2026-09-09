@@ -85,8 +85,45 @@ func SaveConfig(c Config) error {
 
 // ---------- Cache ----------
 
-// CacheEntry maps a lower-cased search query to a resolved Go module path.
-type Cache map[string]string
+// CacheEntry records enough metadata to resolve and install a package without
+// contacting the network. The custom decoder below keeps old string-only
+// cache.json files compatible with GoGet 1.x.
+type CacheEntry struct {
+	Name          string    `json:"name,omitempty"`
+	Module        string    `json:"module"`
+	Package       string    `json:"package,omitempty"`
+	Type          string    `json:"type,omitempty"`
+	InstallMethod string    `json:"install_method,omitempty"`
+	UpdatedAt     time.Time `json:"updated_at,omitempty"`
+}
+
+type Cache map[string]CacheEntry
+
+func (c *Cache) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if *c == nil {
+		*c = Cache{}
+	}
+	for key, value := range raw {
+		var module string
+		if err := json.Unmarshal(value, &module); err == nil {
+			(*c)[key] = CacheEntry{Name: key, Module: module}
+			continue
+		}
+		var entry CacheEntry
+		if err := json.Unmarshal(value, &entry); err != nil {
+			return fmt.Errorf("invalid cache entry %q: %w", key, err)
+		}
+		if entry.Name == "" {
+			entry.Name = key
+		}
+		(*c)[key] = entry
+	}
+	return nil
+}
 
 func LoadCache() (Cache, error) {
 	c := Cache{}
@@ -103,13 +140,44 @@ func SaveCache(c Cache) error {
 	return writeJSON("cache.json", c)
 }
 
+func ClearCache() error {
+	p, err := path("cache.json")
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 func (c Cache) Get(query string) (string, bool) {
-	v, ok := c[strings.ToLower(query)]
-	return v, ok
+	entry, ok := c[strings.ToLower(query)]
+	return entry.Module, ok
 }
 
 func (c Cache) Set(query, modulePath string) {
-	c[strings.ToLower(query)] = modulePath
+	key := strings.ToLower(query)
+	entry := c[key]
+	entry.Name = query
+	entry.Module = modulePath
+	entry.UpdatedAt = time.Now()
+	c[key] = entry
+}
+
+func (c Cache) GetEntry(query string) (CacheEntry, bool) {
+	entry, ok := c[strings.ToLower(query)]
+	return entry, ok
+}
+
+func (c Cache) SetEntry(query string, entry CacheEntry) {
+	if entry.Name == "" {
+		entry.Name = query
+	}
+	if entry.UpdatedAt.IsZero() {
+		entry.UpdatedAt = time.Now()
+	}
+	c[strings.ToLower(query)] = entry
 }
 
 // ---------- History ----------
@@ -118,6 +186,7 @@ func (c Cache) Set(query, modulePath string) {
 type HistoryEntry struct {
 	Package     string    `json:"package"`
 	Module      string    `json:"module"`
+	Type        string    `json:"type,omitempty"`
 	InstalledAt time.Time `json:"installed_at"`
 }
 
@@ -133,11 +202,17 @@ func SaveHistory(h []HistoryEntry) error {
 
 // AddHistory prepends a new entry (most recent first) and caps the list.
 func AddHistory(pkg, module string) error {
+	return AddHistoryEntry(HistoryEntry{Package: pkg, Module: module})
+}
+
+func AddHistoryEntry(entry HistoryEntry) error {
 	h, err := LoadHistory()
 	if err != nil {
 		return err
 	}
-	entry := HistoryEntry{Package: pkg, Module: module, InstalledAt: time.Now()}
+	if entry.InstalledAt.IsZero() {
+		entry.InstalledAt = time.Now()
+	}
 	h = append([]HistoryEntry{entry}, h...)
 	if len(h) > maxHistoryEntries {
 		h = h[:maxHistoryEntries]

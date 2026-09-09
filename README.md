@@ -1,29 +1,33 @@
 # GoGet
 
-Install Go **CLI tools** by name — not by full GitHub module path.
+Discover and install Go **packages and CLI tools** by name — without needing
+to remember full module paths or whether to use `go get` or `go install`.
 
 ```bash
 goget cli-name
-# instead of: go install github.com/user/cli-name@latest
+# instead of remembering the full module path
 
-# Examples: standalone CLI tools
+# Examples
+goget gin            # Go library; uses go get inside a Go project
+goget bcrypt         # Resolves golang.org/x/crypto/bcrypt
 goget hugo            # Static site generator
 goget k6              # Load testing tool
 goget buf             # Protocol buffer compiler
 goget golangci-lint   # Go linter aggregator
 ```
 
-**Note:** GoGet installs **standalone CLI tools and utilities**. If you want to add a library dependency (like gin, gorm) to your project, use `go get` instead:
+GoGet 3 distinguishes libraries from standalone commands:
 
 ```bash
 # Adding a dependency to your project
 go get github.com/gin-gonic/gin
 
 # Installing a CLI tool globally
-goget myctl
+goget air
 ```
 
-GoGet searches GitHub for CLI repositories, ranks the results by popularity, shows an interactive menu when there's more than one match, detects typos, and remembers what you've installed. It has **zero external dependencies** — just the Go standard library — so there's nothing to fetch from a module proxy in order to build it.
+GoGet checks its local cache and registry before using GitHub as a discovery
+fallback. It has **zero external dependencies** — just the Go standard library.
 
 ## Install
 
@@ -64,10 +68,20 @@ go build -o goget .
 
 | Command | Description |
 |---|---|
-| `goget <tool-name>` | Search GitHub and install a CLI tool |
-| `goget <tool-name> --save <profile>` | Install and save it into a profile |
-| `goget info <tool-name>` | Show tool metadata without installing |
-| `goget history` | Show recently installed tools |
+| `goget <name>` | Resolve and install a library or CLI tool |
+| `goget <name>@<version>` | Resolve and install a specific version |
+| `goget --offline <name>` | Resolve without network discovery |
+| `goget <name> --save <profile>` | Install and save it into a profile |
+| `goget search <query>` | Search the local GoGet registry |
+| `goget info <name>` | Show package metadata without installing |
+| `goget update <name>` | Update a package or command |
+| `goget outdated` | Show available project module updates |
+| `goget doctor` | Diagnose GoGet and the Go environment |
+| `goget cache` | Inspect local resolution cache |
+| `goget cache clear` | Clear local resolution cache |
+| `goget init` | Initialize a Go module interactively |
+| `goget remove <name>` | Remove a project library dependency |
+| `goget history` | Show recently installed packages |
 | `goget login` | Save a GitHub token to raise API rate limits |
 | `goget use <profile>` | Install every tool saved in a profile |
 | `goget profile create <name>` | Create a new empty profile |
@@ -86,22 +100,24 @@ go build -o goget .
 
 ## How it works
 
-For any `goget <tool-name>`, the resolution flow is:
+GoGet 3 resolves packages through the local cache and registry first, using
+GitHub only as a fallback for unknown names.
 
 1. **Local cache** — if you've resolved this exact name before, skip
    straight to installing.
-2. **GitHub search** — search Go repositories whose name matches `<tool-name>`.
+2. **Registry lookup** — search structured metadata by name, alias, category, and description.
    - Exactly one exact match → install it directly.
    - Multiple matches → show an interactive menu ranked by **stars** and **recency** so you pick the right one.
-3. **GitHub user/org search** — if nothing matched by name, check whether `<tool-name>`
-   is a GitHub username/org, and if so list their top Go repositories to
-   choose from.
-4. **Typo detection** — if it's not a tool or user, run a broader search and rank results by edit distance (Levenshtein distance), suggesting "Did you mean…" options for typos.
+3. **Remote registry** — if configured, request only the package metadata needed.
+4. **Discovery fallback** — use GitHub search, classify the result, and persist the metadata.
 
-When you pick a tool, GoGet:
-- Caches the resolution (name → module path) for fast future installs
-- Runs `go install github.com/user/tool@latest` to download and install it
-- Logs it to your install history for reference
+Libraries use `go get` inside a project. Commands use `go install`. Both flows
+accept `@version`, and only structured registry metadata influences the choice.
+
+The shipped catalog contains 500+ curated Go ecosystem modules and has no
+hard-coded size limit. Set `GOGET_REGISTRY_URL` to use a registry service that
+implements `GET /resolve/:name` and `GET /search?q=...`. Packages discovered
+through the fallback are stored in `package-registry.json` for later runs.
 
 ## Profiles
 
@@ -341,7 +357,8 @@ Everything lives under `~/.config/goget/`:
 ├── cache.json        # name -> resolved module path
 ├── history.json      # recently installed packages
 ├── profiles.json     # named collections of saved packages
-└── registry.json     # profile repository configuration
+├── registry.json     # profile repository configuration
+└── package-registry.json # locally discovered package metadata
 ```
 
 ## GitHub rate limits
@@ -364,9 +381,10 @@ goget/
 ├── cmd_misc.go          `goget history`, `goget login`
 └── internal/
     ├── ghclient/        GitHub REST API client
-    ├── storage/         JSON persistence (config/cache/history/profiles/registry)
+    ├── registry/        Built-in catalog and optional remote registry client
+    ├── storage/         JSON persistence (config/cache/history/profiles)
     ├── fuzzy/           Levenshtein distance + ranking
-    ├── installer/       wraps `go install`
+    ├── installer/       safely wraps `go get` and `go install`
     └── ui/              terminal prompts (menus, confirm, text input)
 ```
 📱 Support
@@ -388,14 +406,10 @@ Found this helpful?
 - `goget login` currently echoes the token as you type it (no external
   dependency is used for hidden input). Treat your terminal history and
   screen accordingly.
-- Package resolution relies on the GitHub Search API, which occasionally
-  returns repos that match on more than just the name (description/README
-  matches can surface). The interactive menu always shows star counts and
-  descriptions so you can sanity-check before installing.
-- `goget install`'s underlying `go install <module>@latest` call depends
-  on your local Go toolchain and network access to your configured
-  `GOPROXY` (defaults to `proxy.golang.org`) — this is unrelated to GoGet
-  itself.
+- Unknown package resolution can still use the GitHub Search API as a fallback;
+  registry packages do not need GitHub on the normal path.
+- Library installs require a Go project with `go.mod`; standalone commands use
+  `go install <module>@version` and depend on your configured `GOPROXY`.
 - For profile registry features (`goget registry`, `goget profile publish`,
   `goget profile fetch`), users need write access to the repository if
   they want to publish profiles. Most users will only fetch/download profiles.

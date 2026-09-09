@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kehindetemple/goget/internal/installer"
+	"github.com/kehindetemple/goget/internal/registry"
 	"github.com/kehindetemple/goget/internal/storage"
 	"github.com/kehindetemple/goget/internal/ui"
 )
@@ -91,9 +92,16 @@ func cmdUse(profileName string) error {
 	}
 
 	var succeeded, failed []string
+	catalog := registry.Load()
 	for _, pkg := range pkgs {
 		fmt.Printf("Installing %s (%s) ...\n", pkg.Name, pkg.Module)
-		if err := installer.Install(pkg.Module); err != nil {
+		packageType := registry.Library
+		if registered, ok := catalog.Resolve(pkg.Module); ok {
+			packageType = registered.Type
+		} else {
+			packageType = packageFromModule(pkg.Module).Type
+		}
+		if err := installer.InstallPackage(pkg.Module, string(packageType), "latest"); err != nil {
 			fmt.Printf("  ✘ failed: %v\n", err)
 			failed = append(failed, pkg.Name)
 			continue

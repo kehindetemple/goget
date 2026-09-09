@@ -1,55 +1,45 @@
-// Command goget is an intelligent Go CLI tool that installs Go packages
-// without requiring the user to remember full GitHub module paths.
-//
-// See the accompanying PRD (GoGet V1) for full feature details.
+// Command goget is an intelligent Go package discovery and installation tool.
 package main
 
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
-const usage = `GoGet — install Go packages by name, not by full module path.
+const usage = `GoGet - discover and install Go packages by name.
 
 Usage:
-  goget <name>                        Search GitHub and install a package
-  goget <name> --save <profile>       Install and save it into a profile
-  goget info <name>                   Show package metadata without installing
-  goget history                       Show recently installed packages
-  goget login                         Save a GitHub token to raise API rate limits
+  goget <name>[@version]             Resolve and install a package or command
+  goget --offline <name>             Resolve from local data without discovery
+  goget <name> --save <profile>      Install and save it into a profile
+  goget search <query>               Search the local GoGet registry
+  goget info <name>                  Show package metadata without installing
+  goget update <name>                Update a package or command to latest
+  goget outdated                     Show available project module updates
+  goget doctor                       Diagnose GoGet and Go environment
+  goget cache                        Show local resolution cache
+  goget cache clear                  Clear local resolution cache
+  goget init                         Initialize a Go module interactively
+  goget remove <name>                Remove a project dependency safely
+  goget history                      Show recently installed packages
+  goget login                        Save a GitHub token for fallback discovery
 
-  goget use <profile>                 Install every package saved in a profile
-
-  goget profile create <name>         Create a new empty profile
-  goget profile list                  List all profiles
-  goget profile show <name>           Show packages saved in a profile
-  goget profile remove <p> <pkg>      Remove one package from a profile
-  goget profile delete <name>         Delete an entire profile
-
-  goget profile share <name>          Upload profile to GitHub Gist (shareable link)
-  goget profile download <gistID>     Download a shared profile from GitHub Gist
-  goget profile export <name>         Export profile to a local JSON file
-  goget profile import <file>         Import profile from a local JSON file
-
-  goget profile publish <name>        Publish profile to your GitHub repo
-  goget profile fetch <user> <name>   Fetch profile from another user's GitHub repo
-  goget registry set <repo-url>       Configure your profile repository (e.g., github.com/user/goget-profiles)
+  goget use <profile>                Install every tool saved in a profile
+  goget profile <subcommand>         Create, list, share, import, or publish profiles
+  goget registry <subcommand>        Configure the profile repository
 
 Examples:
   goget gin
-  goget joho
-  goget godotvn
-  goget gin --save api
-  goget use api
-  goget profile share api
-  goget profile download abc123def456
-  goget registry set github.com/yourname/goget-profiles
-  goget profile publish api
-  goget profile fetch othername api
+  goget air
+  goget github.com/gin-gonic/gin
+  goget gin@v1.10.0
+  goget search database
+  goget --offline gin
 `
 
 func main() {
-	args := os.Args[1:]
+	args, offline := parseGlobalArgs(os.Args[1:])
 	if len(args) == 0 {
 		fmt.Print(usage)
 		os.Exit(1)
@@ -60,52 +50,83 @@ func main() {
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return
-
 	case "version", "-v", "--version":
-		fmt.Println("GoGet v1.0.0")
-		fmt.Println("Intelligent Go package installer")
+		fmt.Println("GoGet v3.0.0")
+		fmt.Println("Intelligent Go package discovery and installation")
 		fmt.Println("https://github.com/kehindetemple/goget")
 		return
-
 	case "info":
 		if len(args) < 2 {
-			fmt.Println("usage: goget info <name>")
-			os.Exit(1)
+			err = fmt.Errorf("usage: goget info <name>")
+			break
 		}
 		err = cmdInfo(args[1])
-
+	case "search":
+		if len(args) < 2 {
+			err = fmt.Errorf("usage: goget search <query>")
+			break
+		}
+		err = cmdSearchWithOptions(strings.Join(args[1:], " "), offline)
+	case "doctor":
+		err = cmdDoctor()
+	case "cache":
+		err = dispatchCache(args[1:])
+	case "update":
+		if len(args) < 2 {
+			err = fmt.Errorf("usage: goget update <name>")
+			break
+		}
+		err = cmdUpdate(args[1])
+	case "outdated":
+		err = cmdOutdated()
+	case "remove":
+		if len(args) < 2 {
+			err = fmt.Errorf("usage: goget remove <name>")
+			break
+		}
+		err = cmdRemove(args[1])
+	case "init":
+		err = cmdInit()
 	case "login":
 		err = cmdLogin()
-
 	case "history":
 		err = cmdHistory()
-
 	case "use":
 		if len(args) < 2 {
-			fmt.Println("usage: goget use <profile>")
-			os.Exit(1)
+			err = fmt.Errorf("usage: goget use <profile>")
+			break
 		}
 		err = cmdUse(args[1])
-
 	case "registry":
 		err = dispatchRegistry(args[1:])
-
 	case "profile":
 		err = dispatchProfile(args[1:])
-
 	default:
 		pkg, saveProfile, perr := parseInstallArgs(args)
 		if perr != nil {
-			fmt.Println("error:", perr)
-			os.Exit(1)
+			err = perr
+			break
 		}
-		err = cmdInstall(pkg, saveProfile)
+		err = cmdInstallWithOptions(pkg, saveProfile, offline)
 	}
 
 	if err != nil {
 		fmt.Println("error:", err)
 		os.Exit(1)
 	}
+}
+
+func parseGlobalArgs(args []string) ([]string, bool) {
+	offline := false
+	filtered := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--offline" {
+			offline = true
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	return filtered, offline
 }
 
 func dispatchProfile(args []string) error {

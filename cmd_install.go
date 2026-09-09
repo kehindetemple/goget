@@ -13,64 +13,70 @@ func moduleFor(r *ghclient.Repo) string {
 	return "github.com/" + r.Owner.Login + "/" + r.Name
 }
 
-// cmdInstall implements Feature 1 (Smart Package Installation) plus the
-// cache short-circuit (Feature 6) and optional profile save (Feature 7).
-func cmdInstall(name string, saveProfile string) error {
-	cfg, err := storage.LoadConfig()
+// cmdInstall keeps the original API while enabling the v3 resolver.
+func cmdInstall(name, saveProfile string) error {
+	return cmdInstallWithOptions(name, saveProfile, false)
+}
+
+func cmdInstallWithOptions(name, saveProfile string, offline bool) error {
+	request := parsePackageRequest(name)
+	pkg, version, err := resolvePackage(name, offline)
 	if err != nil {
 		return err
 	}
-	gh := ghclient.New(cfg.GitHubToken)
 
 	cache, err := storage.LoadCache()
 	if err != nil {
-		return err
+		return fmt.Errorf("cache error: %w", err)
+	}
+	cacheEntry := storage.CacheEntry{
+		Name:          pkg.Name,
+		Module:        pkg.Module,
+		Package:       pkg.Package,
+		Type:          string(pkg.Type),
+		InstallMethod: string(pkg.InstallMethod),
+	}
+	cache.SetEntry(request.Name, cacheEntry)
+	cache.SetEntry(pkg.Name, cacheEntry)
+	if err := storage.SaveCache(cache); err != nil {
+		fmt.Println("warning: failed to update cache:", err)
 	}
 
-	var modulePath string
-	var pkgName string
-
-	if cached, ok := cache.Get(name); ok {
-		fmt.Printf("Found %s in local cache -> %s\n", name, cached)
-		modulePath = cached
-		pkgName = name
+	friendlyVersion := version
+	if friendlyVersion == "" {
+		friendlyVersion = "latest"
+	}
+	fmt.Printf("Resolved %s -> %s\n", request.Name, pkg.Module)
+	fmt.Printf("Type: %s | Install method: %s | Version: %s\n", pkg.Type, pkg.InstallMethod, friendlyVersion)
+	if pkg.Verified {
+		fmt.Println("Verified: yes")
 	} else {
-		repo, err := resolveRepo(gh, name)
-		if err != nil {
-			return err
-		}
-		modulePath = moduleFor(repo)
-		pkgName = repo.Name
-		fmt.Printf("Resolved %s -> %s\n", name, modulePath)
-
-		cache.Set(name, modulePath)
-		cache.Set(pkgName, modulePath) // also cache under the real package name
-		if err := storage.SaveCache(cache); err != nil {
-			fmt.Println("warning: failed to update cache:", err)
-		}
+		fmt.Println("Verified: no (discovered fallback)")
 	}
-
-	fmt.Printf("Installing %s ...\n", modulePath)
-	if err := installer.Install(modulePath); err != nil {
-		return err
+	install := installer.InstallPackage
+	if offline {
+		install = installer.InstallOffline
 	}
-	fmt.Printf("✔ %s installed successfully (%s)\n", pkgName, modulePath)
+	if err := install(pkg.Module, string(pkg.Type), friendlyVersion); err != nil {
+		return fmt.Errorf("installation error: package resolved successfully, but installation failed: %w", err)
+	}
+	fmt.Printf("✔ %s installed successfully (%s)\n", pkg.Name, pkg.Module)
 
-	if err := storage.AddHistory(pkgName, modulePath); err != nil {
+	if err := storage.AddHistoryEntry(storage.HistoryEntry{Package: pkg.Name, Module: pkg.Module, Type: string(pkg.Type)}); err != nil {
 		fmt.Println("warning: failed to update history:", err)
 	}
 
 	if saveProfile != "" {
-		if err := storage.SaveToProfile(saveProfile, pkgName, modulePath); err != nil {
+		if err := storage.SaveToProfile(saveProfile, pkg.Name, pkg.Module); err != nil {
 			return fmt.Errorf("installed, but failed to save to profile %q: %w", saveProfile, err)
 		}
-		fmt.Printf("✔ saved %s to profile %q\n", pkgName, saveProfile)
+		fmt.Printf("✔ saved %s to profile %q\n", pkg.Name, saveProfile)
 	}
 	return nil
 }
 
-// parseInstallArgs pulls a trailing `--save <profile>` flag out of the
-// argument list, e.g. `goget gin --save api`.
+// parseInstallArgs pulls flags out of the argument list, e.g.
+// `goget gin --save api`.
 func parseInstallArgs(args []string) (pkg string, saveProfile string, err error) {
 	if len(args) == 0 {
 		return "", "", fmt.Errorf("no package name given")
@@ -86,6 +92,7 @@ func parseInstallArgs(args []string) (pkg string, saveProfile string, err error)
 			i++
 			continue
 		}
+		return "", "", fmt.Errorf("unknown option %q", rest[i])
 	}
 	return pkg, saveProfile, nil
 }

@@ -2,56 +2,65 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/kehindetemple/goget/internal/ghclient"
-	"github.com/kehindetemple/goget/internal/storage"
+	"github.com/kehindetemple/goget/internal/registry"
 )
 
-// cmdInfo implements Feature 5 (Package Information).
 func cmdInfo(name string) error {
-	cfg, err := storage.LoadConfig()
+	pkg, _, err := resolvePackage(name, false)
 	if err != nil {
 		return err
 	}
-	gh := ghclient.New(cfg.GitHubToken)
-
-	repo, err := resolveRepo(gh, name)
-	if err != nil {
-		return err
+	verified := "No"
+	if pkg.Verified {
+		verified = "Yes"
 	}
-
-	// Refetch full metadata directly, since search results omit some fields.
-	full, err := gh.GetRepo(repo.Owner.Login, repo.Name)
-	if err != nil {
-		full = *repo // fall back to what we already have
+	deprecated := "No"
+	if pkg.Deprecated {
+		deprecated = "Yes"
 	}
-
-	release, err := gh.LatestRelease(full.Owner.Login, full.Name)
-	if err != nil {
-		release.TagName = "unavailable"
-	}
-	latest := release.TagName
+	latest := pkg.Latest
 	if latest == "" {
-		latest = "no releases published"
+		latest = "managed by Go modules"
+	}
+	license := pkg.License
+	if license == "" {
+		license = "not available"
 	}
 
-	license := "none"
-	if full.License != nil && full.License.Name != "" {
-		license = full.License.Name
+	fmt.Printf("%s\n\n", pkg.Name)
+	fmt.Printf("Module:       %s\n", pkg.Module)
+	if pkg.Package != "" {
+		fmt.Printf("Package:      %s\n", pkg.Package)
 	}
-
-	desc := full.Description
-	if desc == "" {
-		desc = "(no description)"
-	}
-
-	fmt.Printf("Package:      %s\n", full.FullName)
-	fmt.Printf("Description:  %s\n", desc)
-	fmt.Printf("Stars:        %d\n", full.StargazersCount)
-	fmt.Printf("License:      %s\n", license)
+	fmt.Printf("Type:         %s\n", title(string(pkg.Type)))
+	fmt.Printf("Install:      %s\n", pkg.InstallMethod)
 	fmt.Printf("Latest:       %s\n", latest)
-	fmt.Printf("Repository:   %s\n", full.HTMLURL)
-	fmt.Printf("Last Updated: %s\n", full.UpdatedAt.Format("2006-01-02"))
-	fmt.Printf("Module path:  %s\n", moduleFor(&full))
+	fmt.Printf("License:      %s\n", license)
+	fmt.Printf("Verified:     %s\n", verified)
+	fmt.Printf("Deprecated:    %s\n", deprecated)
+	fmt.Printf("Health:       %d/100\n", pkg.Health.Score)
+	if len(pkg.Aliases) > 0 {
+		fmt.Printf("Aliases:      %v\n", pkg.Aliases)
+	}
+	if pkg.Description != "" {
+		fmt.Printf("Description:  %s\n", pkg.Description)
+	}
+	if pkg.Health.Score > 0 {
+		fmt.Println()
+		fmt.Printf("Maintenance:   %d\n", pkg.Health.Maintenance)
+		fmt.Printf("Popularity:    %d\n", pkg.Health.Popularity)
+		fmt.Printf("Activity:      %d\n", pkg.Health.Activity)
+		fmt.Printf("Documentation: %d\n", pkg.Health.Documentation)
+		fmt.Printf("Security:      %d\n", pkg.Health.Security)
+	}
+	if pkg.Type == registry.Library && pkg.Package == "" {
+		fmt.Printf("\nImport path:   %s\n", pkg.Module)
+	}
 	return nil
+}
+
+func title(value string) string {
+	return strings.ToUpper(value[:1]) + value[1:]
 }
