@@ -62,9 +62,13 @@ func looksLikeCommand(module string) bool {
 	known := map[string]bool{
 		"air": true, "buf": true, "delve": true, "dlv": true, "goreleaser": true,
 		"golangci-lint": true, "govulncheck": true, "mockgen": true, "sqlc": true,
-		"staticcheck": true, "swag": true, "templ": true,
+		"staticcheck": true, "swag": true, "templ": true, "hugo": true, "k6": true,
 	}
-	return known[parts[len(parts)-1]]
+	name := parts[len(parts)-1]
+	if len(parts) > 1 && len(name) > 1 && name[0] == 'v' && strings.Trim(name[1:], "0123456789") == "" {
+		name = parts[len(parts)-2]
+	}
+	return known[name]
 }
 
 func installMethodFor(packageType registry.PackageType) registry.InstallMethod {
@@ -108,10 +112,11 @@ func resolvePackage(input string, offline bool) (registry.Package, string, error
 	if pkg, ok := catalog.Resolve(request.Name); ok {
 		return pkg, request.Version, nil
 	}
-	if suggestion, ok := suggestPackage(catalog, request.Name); ok {
-		return registry.Package{}, "", fmt.Errorf("resolution error: %q was not found; did you mean %q?", request.Name, suggestion.Name)
-	}
+	suggestion, hasSuggestion := suggestPackage(catalog, request.Name)
 	if offline {
+		if hasSuggestion {
+			return registry.Package{}, "", fmt.Errorf("resolution error: %q was not found; did you mean %q?", request.Name, suggestion.Name)
+		}
 		return registry.Package{}, "", fmt.Errorf("resolution error: %q is not in the local cache or registry; offline mode made no network requests", request.Name)
 	}
 
@@ -130,6 +135,9 @@ func resolvePackage(input string, offline bool) (registry.Package, string, error
 	}
 	repo, err := resolveRepo(ghclient.New(cfg.GitHubToken), request.Name)
 	if err != nil {
+		if hasSuggestion {
+			return registry.Package{}, "", fmt.Errorf("discovery error: %w; did you mean %q?", err, suggestion.Name)
+		}
 		return registry.Package{}, "", fmt.Errorf("discovery error: %w", err)
 	}
 	pkg := packageFromRepo(repo)
@@ -149,7 +157,13 @@ func suggestPackage(catalog *registry.Registry, query string) (registry.Package,
 			best = pkg
 		}
 	}
-	threshold := len([]rune(query))/2 + 1
+	threshold := len([]rune(query)) / 3
+	if threshold < 1 {
+		threshold = 1
+	}
+	if threshold > 2 {
+		threshold = 2
+	}
 	return best, best.Name != "" && bestDistance <= threshold
 }
 
