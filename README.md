@@ -114,7 +114,7 @@ GitHub only as a fallback for unknown names.
 Libraries use `go get` inside a project. Commands use `go install`. Both flows
 accept `@version`, and only structured registry metadata influences the choice.
 
-The shipped catalog contains 500+ curated Go ecosystem modules and has no
+The shipped catalog contains 1,000+ curated Go ecosystem modules and has no
 hard-coded size limit. Set `GOGET_REGISTRY_URL` to use a registry service that
 implements `GET /resolve/:name` and `GET /search?q=...`. Packages discovered
 through the fallback are stored in `package-registry.json` for later runs.

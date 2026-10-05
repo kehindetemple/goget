@@ -9,7 +9,6 @@ import (
 // The hand-curated entries in default.go override these entries when names
 // overlap and carry richer metadata such as license and health scores.
 var supplementalModuleCatalog = `
-+avelino/awesome-go
 pancsta/asyncmachine-go
 ergo-services/ergo
 tochemey/goakt
@@ -516,10 +515,18 @@ func supplementalPackages(existing []Package) []Package {
 	for _, pkg := range existing {
 		known[strings.ToLower(pkg.Name)] = true
 		known[strings.ToLower(pkg.Module)] = true
+		for _, alias := range pkg.Aliases {
+			known[strings.ToLower(alias)] = true
+		}
 	}
-	out := make([]Package, 0, len(supplementalModuleCatalog))
-	for _, module := range strings.Fields(supplementalModuleCatalog) {
-		name := path.Base(module)
+	entries := append(strings.Fields(supplementalModuleCatalog), strings.Fields(communityModuleCatalog)...)
+	out := make([]Package, 0, len(entries))
+	for _, entry := range entries {
+		name, module, hasName := strings.Cut(entry, "|")
+		if !hasName {
+			module = entry
+			name = path.Base(module)
+		}
 		if name == "" || known[strings.ToLower(name)] || known[strings.ToLower(module)] {
 			continue
 		}
